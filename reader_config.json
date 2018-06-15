@@ -1,13 +1,13 @@
 {
   "data_suffix": ".dat",
-  "data_dim": 21,
+  "data_dim": 75,
 
   "emotion_enabled": true,
   "emotion_dim": 1,
   "emotion_suffix": ".emo",
-  "emotion_categories": ["Anger"],
+  "emotion_categories": ["0","1"],
 
-  "phoneme_enabled": true,
+  "phoneme_enabled": false,
   "phoneme_dim": 1,
   "phoneme_suffix": ".pho",
   "phoneme_categories": ["AA", "AE", "AH", "AO", "AW", "AX", "AXR", "AY", "B", "CH", "D",
