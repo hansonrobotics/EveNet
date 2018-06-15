@@ -50,9 +50,9 @@ def causal_conv(value, filter_, dilation, name='causal_conv'):
         padding = [[0, 0], [(filter_width - 1) * dilation, 0], [0, 0]]
         padded = tf.pad(value, padding)
         if dilation > 1:
-            transformed = time_to_batch(padded, dilation)
-            conv = tf.nn.conv1d(transformed, filter_, stride=1, padding='SAME')
-            restored = batch_to_time(conv, dilation)
+            # transformed = time_to_batch(padded, dilation)
+            restored = tf.nn.conv1d(padded, filter_, stride=1, padding='SAME')
+            # restored = batch_to_time(conv, dilation)
         else:
             restored = tf.nn.conv1d(padded, filter_, stride=1, padding='SAME')
         # Remove excess elements at the end.
@@ -71,7 +71,7 @@ def encode_data(data,data_dim):
         lower bound). We want to design a function that represent x interms of l and u.
             x = p * l + q * u
         and we want to find p and q where , p + q = 1
-        More explanation and proof is found at https://docs.google.com/document/d/1z29ABXsvclBBJi7Q8svldnc5gvj2NizKad0i3mHDuds/edit?usp=sharing
+        More explanation and justification  found at https://docs.google.com/document/d/1z29ABXsvclBBJi7Q8svldnc5gvj2NizKad0i3mHDuds/edit?usp=sharing
     Arguments:
         data {{tf.Tensor}} -- Tensor containing values of each shape key of frames
         data_dim {int} -- Dimenstion of each frame. This crossponds to number of shapekeys for single frame
