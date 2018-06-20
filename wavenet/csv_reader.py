@@ -70,7 +70,7 @@ class CsvReader(object):
 
         # Parse the CSV File
         if mapping_strings:
-            default_value = "N/A"
+            default_value = 1
         else:
             default_value = 1.0
 
@@ -78,10 +78,10 @@ class CsvReader(object):
         features = tf.decode_csv(rows, record_defaults=record_defaults)
 
         # Mapping for Conditioning Files, replace String by lookup table.
-        if mapping_strings:
-            table = tf.contrib.lookup.index_table_from_tensor(tf.constant(mapping_strings))
-            features = table.lookup(tf.stack(features))
-            features = tf.unstack(features)
+        # if mapping_strings:
+        #     table = tf.contrib.lookup.index_table_from_tensor(tf.constant(mapping_strings))
+        #     features = table.lookup(tf.stack(features))
+        #     features = tf.unstack(features)
 
         # Resize the feature vector in case we got an incomplete read from the reader
         features = tf.transpose(features)

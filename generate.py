@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 
 from socket import *
 import thread
+from wavenet.model import WaveNetModel
 
 """
 Training script for the EveNet network.
@@ -170,9 +171,51 @@ def main():
     #    var.name[:-2]: var for var in tf.global_variables()
     #    if not ('state_buffer' in var.name or 'pointer' in var.name)}
     # saver = tf.train.Saver(variables_to_restore)
+    batch_size = 1
+    dilations = [1, 2, 4, 8,16, 1, 2, 4, 8,16]
+    filter_width = 8
+    residual_channels = 64
+    dilation_channels = 64
+    skip_channels = 512
+    use_biases = True
+    initial_filter_width = 32
+    gc_channels = 64
+    lc_channels = None
+
+    net = WaveNetModel(
+                batch_size=batch_size,
+                dilations=dilations,
+                filter_width=filter_width,
+                residual_channels=residual_channels,
+                dilation_channels=dilation_channels,
+                skip_channels=skip_channels,
+                quantization_channels=11,
+                use_biases=use_biases,
+                scalar_input=False,
+                initial_filter_width=initial_filter_width,
+                histograms=False,
+                global_channels=gc_channels,
+                local_channels=lc_channels)
+                
+    samples = tf.placeholder(tf.float32, shape=(net.receptive_field, net.data_dim), name="samples")
+    gc = tf.placeholder(tf.int32, shape=(net.receptive_field), name="gc")
+    lc = tf.placeholder(tf.int32, shape=(net.receptive_field), name="lc")  # TODO set to one
+
+    gc = tf.one_hot(gc, gc_channels)
+    # lc = tf.one_hot(lc, lc_channels / 1)  # TODO set to one...
+
+    if args.fast_generation:
+        next_sample = net.predict_proba_incremental(samples, gc, None)
+    else:
+        next_sample = net.predict_proba(samples, gc, None)
 
     print('Restoring model from {}'.format(args.checkpoint))
-    saver = tf.train.import_meta_graph(args.checkpoint + '.meta', clear_devices=False)
+    variables_to_restore = {
+        var.name[:-2]: var for var in tf.all_variables()
+        if not ('state_buffer' in var.name or 'pointer' in var.name)}
+    saver = tf.train.Saver(variables_to_restore)
+
+    print('Restoring model from {}'.format(args.checkpoint))
     saver.restore(sess, args.checkpoint)
 
     # Get the config from the Graph
@@ -180,10 +223,7 @@ def main():
     for cfg_tensor in tf.get_collection("config"):
         config[cfg_tensor.name.split(":")[0]] = sess.run(cfg_tensor)
 
-    if args.fast_generation:
-        next_sample = tf.get_collection("predict_proba_incremental")[0]
-    else:
-        next_sample = tf.get_collection("predict_proba")[0]
+    
 
     # TODO: Build up seed placeholders...
     if args.dat_seed:
@@ -191,23 +231,23 @@ def main():
 
         # Data Seed file
         dat_seed = np.genfromtxt(args.dat_seed, delimiter=",")
-        data_feed = dat_seed[:config['receptive_field_size'], :]
+        data_feed = dat_seed[net.receptive_field, :]
 
         # Global conditioning on emotion categories
         gc_lut = mapping_config['emotion_categories']
         gc_feed_str = np.genfromtxt(args.dat_seed.replace(".dat", ".emo"), delimiter=",", dtype=str)
         gc_feed = [gc_lut.index(emo) for emo in gc_feed_str]
-        gc_feed = gc_feed[:config['receptive_field_size']]
+        gc_feed = gc_feed[net.receptive_field]
 
         # Local conditioning on Phonemes.
         lc_lut = mapping_config['phoneme_categories']
         lc_feed_str = np.genfromtxt(args.dat_seed.replace(".dat", ".pho"), delimiter=",", dtype=str)
         lc_feed = [lc_lut.index(pho) for pho in lc_feed_str]
-        lc_feed = lc_feed[:config['receptive_field_size']]
+        lc_feed = lc_feed[net.receptive_field]
     else:
-        data_feed = np.zeros([config['receptive_field_size'], config['data_dim']], dtype=np.float32)
-        gc_feed = np.zeros(config['receptive_field_size'], dtype=np.int32) + 5   # Neutral
-        lc_feed = np.zeros(config['receptive_field_size'], dtype=np.int32) + 47  # SIL
+        data_feed = np.zeros([net.receptive_field, net.data_dim], dtype=np.float32)
+        gc_feed = np.zeros(net.receptive_field, dtype=np.int32) + 5   # Neutral
+        lc_feed = np.zeros(net.receptive_field, dtype=np.int32) + 47  # SIL
 
     last_sample_timestamp = datetime.now()
 
@@ -220,10 +260,10 @@ def main():
 
                 # See Alex repository for feeding in initial samples...
             else:
-                if len(data_feed) > config['receptive_field_size']:
-                    window_data = data_feed[-config['receptive_field_size']:]
-                    window_gc = gc_feed[-config['receptive_field_size']:]
-                    window_lc = lc_feed[-config['receptive_field_size']:]
+                if len(data_feed) > net.receptive_field:
+                    window_data = data_feed[-net.receptive_field:]
+                    window_gc = gc_feed[-net.receptive_field:]
+                    window_lc = lc_feed[-net.receptive_field:]
                 else:
                     window_data = data_feed[:]
                     window_gc = gc_feed[:]

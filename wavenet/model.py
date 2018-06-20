@@ -16,7 +16,7 @@ def create_bias_variable(name, shape):
     '''Create a bias variable with the specified name and shape and initialize
     it to zero.'''
     initializer = tf.constant_initializer(value=0.0, dtype=tf.float32)
-    return tf.Variable(initializer(shape=shape), name)
+    return tf.Variable(initializer(shape=shape), name=name)
 
 
 class WaveNetModel(object):
@@ -664,7 +664,7 @@ class WaveNetModel(object):
                 tf.summary.scalar('loss', reduced_loss)
 
                 if l2_regularization_strength is None:
-                    return reduced_loss + softmax_loss
+                    return reduced_loss 
                 else:
                     # L2 regularization for all trainable parameters
                     l2_loss = tf.add_n([tf.nn.l2_loss(v)
@@ -672,7 +672,7 @@ class WaveNetModel(object):
                                         if not('bias' in v.name)])
 
                     # Add the regularization term to the loss
-                    total_loss = (reduced_loss + softmax_loss +
+                    total_loss = (reduced_loss  +
                                   l2_regularization_strength * l2_loss)
 
                     tf.summary.scalar('l2_loss', l2_loss)

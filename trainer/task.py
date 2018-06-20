@@ -258,14 +258,7 @@ def run(target,
             tf.add_to_collection("config", tf.constant(receptive_field_size, name='receptive_field_size'))
             tf.add_to_collection("config", tf.constant(sample_size, name='sample_size'))
 
-            samples = tf.placeholder(tf.float32, shape=(receptive_field_size, reader.data_dim), name="samples")
-            gc = tf.placeholder(tf.int32, shape=(receptive_field_size), name="gc")
-            lc = tf.placeholder(tf.int32, shape=(receptive_field_size), name="lc")  # TODO set to one
-
-            gc = tf.one_hot(gc, gc_channels)
-            lc = tf.one_hot(lc, lc_channels / 1)  # TODO set to one...
-
-            tf.add_to_collection("predict_proba", net.predict_proba(samples, gc, None))
+            
 
             # TODO: Implement fast generation
             """
@@ -427,8 +420,8 @@ if __name__ == "__main__":
                         help='Part of Wavenet Params')
     parser.add_argument('--dilations',
                         type=list,
-                        default=[1, 2, 4, 8, 16, 32, 64, 128,
-                                 1, 2, 4, 8, 16, 32, 64, 128],
+                        default=[1, 2, 4, 8,16,
+                                 1, 2, 4, 8,16],
                         help='Part of Wavenet Params')
     parser.add_argument('--residual_channels',
                         type=int,
