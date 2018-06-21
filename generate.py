@@ -146,6 +146,7 @@ def create_seed(filename,
 
 
 def main():
+    data_dim = 75
     args = get_arguments()
     started_datestring = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
     logdir = os.path.join(args.logdir, 'generate', started_datestring)
@@ -168,7 +169,7 @@ def main():
         global_condition_channels=args.gc_channels,
         global_condition_cardinality=args.gc_cardinality)
 
-    samples = tf.placeholder(tf.float32)
+    samples = tf.placeholder(tf.float32,[None,data_dim])
     #    shape=[None, wavenet_params['quantization_channels']])
 
     if args.fast_generation:
@@ -195,7 +196,7 @@ def main():
     if args.wav_seed:
         seed = create_seed(args.wav_seed,
                            wavenet_params['sample_rate'],
-                           quantization_channels,
+                           data_dim,
                            net.receptive_field)
         #waveform = sess.run(seed).tolist()
         waveform = seed
@@ -208,7 +209,7 @@ def main():
         #random_arr[0][-1] = 0
         #random_arr[0][-2] = 1
         
-        waveform = np.zeros((net.receptive_field, quantization_channels))
+        waveform = np.zeros((net.receptive_field, data_dim))
         #waveform[-1] = random_arr
         
     # if args.fast_generation and args.wav_seed:
@@ -269,7 +270,7 @@ def main():
         
         if args.bound:
           prediction[0][-2] = (np.cos(step/1000.)+1.)/2.
-        
+        prediction = prediction.reshape(-1,data_dim)
         #waveform.append(prediction)
         waveform = np.append(waveform, prediction, axis=0)
         
@@ -303,7 +304,7 @@ def main():
     if args.wav_out_path:
         if not args.fast_generation:
             waveform = waveform[net.receptive_field:]
-        samp = np.array(waveform).reshape([-1, quantization_channels])
+        samp = np.array(waveform).reshape([-1, data_dim])
         out = sess.run(decode, feed_dict={samples: samp})
         write_wav(out, wavenet_params['sample_rate'], args.wav_out_path)
 
