@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 
-from .ops import causal_conv, mu_law_encode
+from .ops import causal_conv, mu_law_encode,encode_data,decode_data
 
 
 def create_variable(name, shape):
@@ -50,13 +50,15 @@ class WaveNetModel(object):
                  residual_channels,
                  dilation_channels,
                  skip_channels,
-                 quantization_channels=2**8,
+                 quantization_channels=11,
                  use_biases=False,
                  scalar_input=False,
                  initial_filter_width=32,
                  histograms=False,
                  global_condition_channels=None,
-                 global_condition_cardinality=None):
+                 global_condition_cardinality=None,
+                 data_dim = 75
+                 ):
         '''Initializes the WaveNet model.
 
         Args:
@@ -108,7 +110,7 @@ class WaveNetModel(object):
         self.histograms = histograms
         self.global_condition_channels = global_condition_channels
         self.global_condition_cardinality = global_condition_cardinality
-
+        self.data_dim = data_dim
         self.receptive_field = WaveNetModel.calculate_receptive_field(
             self.filter_width, self.dilations, self.scalar_input,
             self.initial_filter_width)
@@ -270,6 +272,7 @@ class WaveNetModel(object):
         are omitted due to the limits of ASCII art.
 
         '''
+        input_batch_shape = tf.shape(input_batch)
         variables = self.variables['dilated_stack'][layer_index]
 
         weights_filter = variables['filter']
@@ -304,10 +307,12 @@ class WaveNetModel(object):
         weights_dense = variables['dense']
         transformed = tf.nn.conv1d(
             out, weights_dense, stride=1, padding="SAME", name="dense")
-
+        out = tf.reshape(out,[self.batch_size,-1,self.data_dim,input_batch_shape[2]])
         # The 1x1 conv to produce the skip output
         skip_cut = tf.shape(out)[1] - output_width
-        out_skip = tf.slice(out, [0, skip_cut, 0], [-1, -1, -1])
+        out_skip = tf.slice(out, [0, skip_cut, 0, 0], [-1, -1, -1, -1])
+        out_skip = tf.reshape(out_skip,[self.batch_size, -1,input_batch_shape[2]])
+
         weights_skip = variables['skip']
         skip_contribution = tf.nn.conv1d(
             out_skip, weights_skip, stride=1, padding="SAME", name="skip")
@@ -329,9 +334,14 @@ class WaveNetModel(object):
                 tf.histogram_summary(layer + '_biases_gate', gate_bias)
                 tf.histogram_summary(layer + '_biases_dense', dense_bias)
                 tf.histogram_summary(layer + '_biases_skip', skip_bias)
-
+        input_batch = tf.reshape(input_batch,[self.batch_size,-1, self.data_dim,input_batch_shape[2]])
+        transformed = tf.reshape(transformed,[self.batch_size,-1, self.data_dim,input_batch_shape[2]])
+        
         input_cut = tf.shape(input_batch)[1] - tf.shape(transformed)[1]
-        input_batch = tf.slice(input_batch, [0, input_cut, 0], [-1, -1, -1])
+        input_batch = tf.slice(input_batch, [0, input_cut, 0, 0], [-1, -1, -1, -1])
+
+        input_batch = tf.reshape(input_batch,[self.batch_size,-1,input_batch_shape[2]])
+        transformed = tf.reshape(transformed,[self.batch_size,-1,input_batch_shape[2]])
 
         return skip_contribution, input_batch + transformed
 
@@ -403,9 +413,10 @@ class WaveNetModel(object):
         else:
             initial_channels = self.quantization_channels
 
-        current_layer = self._create_causal_layer(current_layer)
-
+        input_batch = tf.reshape(input_batch,[self.batch_size,-1,self.data_dim,self.quantization_channels])
         output_width = tf.shape(input_batch)[1] - self.receptive_field + 1
+        input_batch = tf.reshape(input_batch,[self.batch_size,-1,self.quantization_channels])
+        current_layer = self._create_causal_layer(current_layer)
 
         # Add all defined dilation layers.
         with tf.name_scope('dilated_stack'):
@@ -435,16 +446,16 @@ class WaveNetModel(object):
             # We skip connections from the outputs of each layer, adding them
             # all up here.
             total = sum(outputs)
-            transformed1 = tf.nn.sigmoid(total)
+            transformed1 = tf.nn.relu(total)
             conv1 = tf.nn.conv1d(transformed1, w1, stride=1, padding="SAME")
             if self.use_biases:
                 conv1 = tf.add(conv1, b1)
-            transformed2 = tf.nn.sigmoid(conv1)
+            transformed2 = tf.nn.relu(conv1)
             conv2 = tf.nn.conv1d(transformed2, w2, stride=1, padding="SAME")
             if self.use_biases:
                 conv2 = tf.add(conv2, b2)
 
-        return tf.nn.sigmoid(conv2)
+        return tf.nn.softmax(conv2)
 
     def _create_generator(self, input_batch, global_condition_batch):
         '''Construct an efficient incremental generator.'''
@@ -584,12 +595,13 @@ class WaveNetModel(object):
                 encoded = tf.cast(waveform, tf.float32)
                 encoded = tf.reshape(encoded, [-1, 1])
             else:
-                encoded =  self._one_hot(waveform)
+                encoded =  encode_data(waveform,self.data_dim)
 
 
             gc_embedding = self._embed_gc(global_condition)
             raw_output = self._create_network(encoded, gc_embedding)
             out = tf.reshape(raw_output, [-1, self.quantization_channels])
+            out = decode_data(out)
             # Cast to float64 to avoid bug in TensorFlow
             #proba = tf.cast(
             #    tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
@@ -637,7 +649,7 @@ class WaveNetModel(object):
         '''
         with tf.name_scope(name):
             # We mu-law encode and quantize the input audioform.
-            encoded = input_batch
+            encoded = encode_data(input_batch,self.data_dim)
 
             gc_embedding = self._embed_gc(global_condition_batch)
 
@@ -647,12 +659,12 @@ class WaveNetModel(object):
                     [self.batch_size, -1, 1])
             else:
                 network_input = encoded
-
+            network_input = tf.reshape(network_input,[self.batch_size,-1, self.data_dim, self.quantization_channels])
             # Cut off the last sample of network input to preserve causality.
             network_input_width = tf.shape(network_input)[1] - 1
-            network_input = tf.slice(network_input, [0, 0, 0],
-                                     [-1, network_input_width, -1])
-
+            network_input = tf.slice(network_input, [0, 0, 0, 0],
+                                     [-1,network_input_width, -1, -1])
+            network_input = tf.reshape(network_input,[self.batch_size,-1,self.quantization_channels])
             raw_output = self._create_network(network_input, gc_embedding)
 
             with tf.name_scope('loss'):
@@ -661,17 +673,22 @@ class WaveNetModel(object):
                 target_output = tf.slice(
                     tf.reshape(
                         encoded,
-                        [self.batch_size, -1, self.quantization_channels]),
-                    [0, self.receptive_field, 0],
-                    [-1, -1, -1])
+                        [self.batch_size, -1, self.data_dim, self.quantization_channels]),
+                    [0, self.receptive_field, 0, 0],
+                    [-1, -1, -1, -1])
+                
                 target_output = tf.reshape(target_output,
                                            [-1, self.quantization_channels])
+                target_output_decoded = decode_data(target_output)
+
+
                 prediction = tf.reshape(raw_output,
                                         [-1, self.quantization_channels])
+                prediction_decoded = decode_data(prediction)
+                softmax_loss = tf.reduce_mean(-tf.reduce_sum(target_output * tf.log(prediction), axis= -1))
+                loss = tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(target_output_decoded, prediction_decoded))))
 
-                loss = tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(target_output, prediction))))
-
-                reduced_loss = loss
+                reduced_loss = loss + softmax_loss
 
                 tf.summary.scalar('loss', reduced_loss)
 

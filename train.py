@@ -240,7 +240,7 @@ def main():
         residual_channels=wavenet_params["residual_channels"],
         dilation_channels=wavenet_params["dilation_channels"],
         skip_channels=wavenet_params["skip_channels"],
-        quantization_channels=wavenet_params["quantization_channels"],
+        quantization_channels=11,
         use_biases=wavenet_params["use_biases"],
         scalar_input=wavenet_params["scalar_input"],
         initial_filter_width=wavenet_params["initial_filter_width"],
