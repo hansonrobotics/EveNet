@@ -73,7 +73,7 @@ def get_arguments():
     parser.add_argument(
         '--fast_generation',
         type=_str_to_bool,
-        default=True,
+        default=False,
         help='Use fast generation')
     parser.add_argument(
         '--wav_seed',
@@ -83,18 +83,18 @@ def get_arguments():
     parser.add_argument(
         '--gc_channels',
         type=int,
-        default=None,
+        default=64,
         help='Number of global condition embedding channels. Omit if no '
              'global conditioning.')
     parser.add_argument(
         '--gc_cardinality',
         type=int,
-        default=None,
+        default=2,
         help='Number of categories upon which we globally condition.')
     parser.add_argument(
         '--gc_id',
         type=int,
-        default=None,
+        default=0,
         help='ID of category to generate, if globally conditioned.')
 
     parser.add_argument(
