@@ -194,15 +194,13 @@ class AudioReader(object):
                               "threshold, or adjust volume of the audio."
                               .format(filename))
 
-                audio = np.pad(audio, [[self.receptive_field, 0], [0, 0]],
+                audio = np.pad(audio, [[self.receptive_field//DATA_DIM + 1, 0], [0, 0]],
                                'constant')
-
                 if self.sample_size:
                     # Cut samples into pieces of size receptive_field +
                     # sample_size with receptive_field overlap
-                    while len(audio) > self.receptive_field:
-                        piece = audio[:(self.receptive_field +
-                                        self.sample_size), :]
+                    while len(audio) > (self.receptive_field//DATA_DIM + self.sample_size):
+                        piece = audio[:(self.receptive_field//DATA_DIM + self.sample_size), :]
                         sess.run(self.enqueue,
                                  feed_dict={self.sample_placeholder: piece})
                         audio = audio[self.sample_size:, :]

@@ -27,7 +27,7 @@ NUM_STEPS = int(1e5)*3
 LEARNING_RATE = 1e-3
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
-SAMPLE_SIZE = 1000
+SAMPLE_SIZE = 1
 L2_REGULARIZATION_STRENGTH = 0
 SILENCE_THRESHOLD = None
 EPSILON = 0.001
@@ -315,7 +315,7 @@ def main():
                 writer.add_summary(summary, step)
 
             duration = time.time() - start_time
-            print('step {:d} - loss = {:.3f}, ({:.3f} sec/step)'
+            print('step {:d} - loss = {:.5f}, ({:.5f} sec/step)'
                   .format(step, loss_value, duration))
 
             if step % args.checkpoint_every == 0:

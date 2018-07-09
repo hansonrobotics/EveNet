@@ -25,7 +25,7 @@ def create_bias_variable(name, shape):
     '''Create a bias variable with the specified name and shape and initialize
     it to zero.'''
     initializer = tf.constant_initializer(value=0.0, dtype=tf.float32)
-    return tf.Variable(initializer(shape=shape), name)
+    return tf.Variable(initializer(shape=shape), name = name)
 
 
 class WaveNetModel(object):
@@ -307,11 +307,9 @@ class WaveNetModel(object):
         weights_dense = variables['dense']
         transformed = tf.nn.conv1d(
             out, weights_dense, stride=1, padding="SAME", name="dense")
-        out = tf.reshape(out,[self.batch_size,-1,self.data_dim,input_batch_shape[2]])
         # The 1x1 conv to produce the skip output
         skip_cut = tf.shape(out)[1] - output_width
-        out_skip = tf.slice(out, [0, skip_cut, 0, 0], [-1, -1, -1, -1])
-        out_skip = tf.reshape(out_skip,[self.batch_size, -1,input_batch_shape[2]])
+        out_skip = tf.slice(out, [0, skip_cut, 0], [-1, -1, -1])
 
         weights_skip = variables['skip']
         skip_contribution = tf.nn.conv1d(
@@ -334,15 +332,15 @@ class WaveNetModel(object):
                 tf.histogram_summary(layer + '_biases_gate', gate_bias)
                 tf.histogram_summary(layer + '_biases_dense', dense_bias)
                 tf.histogram_summary(layer + '_biases_skip', skip_bias)
-        input_batch = tf.reshape(input_batch,[self.batch_size,-1, self.data_dim,input_batch_shape[2]])
-        transformed = tf.reshape(transformed,[self.batch_size,-1, self.data_dim,input_batch_shape[2]])
+   
         
         input_cut = tf.shape(input_batch)[1] - tf.shape(transformed)[1]
-        input_batch = tf.slice(input_batch, [0, input_cut, 0, 0], [-1, -1, -1, -1])
+        input_batch = tf.slice(input_batch, [0, input_cut, 0], [-1, -1, -1])
 
-        input_batch = tf.reshape(input_batch,[self.batch_size,-1,input_batch_shape[2]])
-        transformed = tf.reshape(transformed,[self.batch_size,-1,input_batch_shape[2]])
 
+        # print(net.receptive_field)
+        # print(prediction.shape)
+        # exit(0)
         return skip_contribution, input_batch + transformed
 
     def _generator_conv(self, input_batch, state_batch, weights):
@@ -413,9 +411,9 @@ class WaveNetModel(object):
         else:
             initial_channels = self.quantization_channels
 
-        input_batch = tf.reshape(input_batch,[self.batch_size,-1,self.data_dim,self.quantization_channels])
-        output_width = tf.shape(input_batch)[1] - self.receptive_field + 1
         input_batch = tf.reshape(input_batch,[self.batch_size,-1,self.quantization_channels])
+        output_width = tf.shape(input_batch)[1] - self.receptive_field + 1
+        
         current_layer = self._create_causal_layer(current_layer)
 
         # Add all defined dilation layers.
@@ -599,16 +597,14 @@ class WaveNetModel(object):
 
 
             gc_embedding = self._embed_gc(global_condition)
+            encoded = tf.reshape(encoded,[self.batch_size,-1,self.quantization_channels])
             raw_output = self._create_network(encoded, gc_embedding)
             out = tf.reshape(raw_output, [-1, self.quantization_channels])
+            
             out = decode_data(out)
             # Cast to float64 to avoid bug in TensorFlow
             #proba = tf.cast(
             #    tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
-            #last = tf.slice(
-            #    proba,
-            #    [tf.shape(proba)[0] - 1, 0],
-            #    [1, self.quantization_channels])
             return out
 
     def predict_proba_incremental(self, waveform, global_condition=None,
@@ -647,6 +643,7 @@ class WaveNetModel(object):
 
         The variables are all scoped to the given name.
         '''
+        
         with tf.name_scope(name):
             # We mu-law encode and quantize the input audioform.
             encoded = encode_data(input_batch,self.data_dim)
@@ -659,12 +656,14 @@ class WaveNetModel(object):
                     [self.batch_size, -1, 1])
             else:
                 network_input = encoded
-            network_input = tf.reshape(network_input,[self.batch_size,-1, self.data_dim, self.quantization_channels])
+            network_input = tf.reshape(network_input,[self.batch_size,-1, self.quantization_channels])
             # Cut off the last sample of network input to preserve causality.
+            # print network_input.shape,"network_input"
+            # exit(0)
             network_input_width = tf.shape(network_input)[1] - 1
-            network_input = tf.slice(network_input, [0, 0, 0, 0],
-                                     [-1,network_input_width, -1, -1])
-            network_input = tf.reshape(network_input,[self.batch_size,-1,self.quantization_channels])
+            network_input = tf.slice(network_input, [0, 0, 0],
+                                     [-1,network_input_width, -1])
+            
             raw_output = self._create_network(network_input, gc_embedding)
 
             with tf.name_scope('loss'):
@@ -673,14 +672,13 @@ class WaveNetModel(object):
                 target_output = tf.slice(
                     tf.reshape(
                         encoded,
-                        [self.batch_size, -1, self.data_dim, self.quantization_channels]),
-                    [0, self.receptive_field, 0, 0],
-                    [-1, -1, -1, -1])
+                        [self.batch_size, -1, self.quantization_channels]),
+                    [0, self.receptive_field, 0],
+                    [-1, -1, -1])
                 
                 target_output = tf.reshape(target_output,
                                            [-1, self.quantization_channels])
                 target_output_decoded = decode_data(target_output)
-
 
                 prediction = tf.reshape(raw_output,
                                         [-1, self.quantization_channels])
@@ -688,7 +686,7 @@ class WaveNetModel(object):
                 softmax_loss = tf.reduce_mean(-tf.reduce_sum(target_output * tf.log(prediction), axis= -1))
                 loss = tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(target_output_decoded, prediction_decoded))))
 
-                reduced_loss = loss + softmax_loss
+                reduced_loss = loss 
 
                 tf.summary.scalar('loss', reduced_loss)
 

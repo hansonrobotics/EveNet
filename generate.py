@@ -209,7 +209,7 @@ def main():
         #random_arr[0][-1] = 0
         #random_arr[0][-2] = 1
         
-        waveform = np.zeros((net.receptive_field, data_dim))
+        waveform = np.zeros((net.receptive_field//data_dim, data_dim))
         #waveform[-1] = random_arr
         
     # if args.fast_generation and args.wav_seed:
@@ -236,16 +236,21 @@ def main():
             outputs.extend(net.push_ops)
             window = waveform[-1]
         else:
-            if len(waveform) > net.receptive_field:
-                window = waveform[-net.receptive_field:]
+            if len(waveform) > net.receptive_field//data_dim:
+                window = waveform[-(net.receptive_field//data_dim):]
             else:
                 window = waveform[:]
 
             outputs = [next_sample]
 
-        # Run the WaveNet to predict the next sample.
-        prediction = sess.run(outputs, feed_dict={samples: window})[0]
+        window = np.append(window,np.zeros((1,75)),axis=0)
+        for i in range(data_dim):
+            prediction = sess.run(outputs, feed_dict={samples: window})[0]
+            window[-1][i] = prediction[i]
 
+        prediction = prediction[:-1]
+        prediction = prediction.reshape(-1,75)
+      
         # # Scale prediction distribution using temperature.
         # np.seterr(divide='ignore')
         # scaled_prediction = np.log(prediction) / args.temperature
@@ -268,9 +273,9 @@ def main():
         #prediction[0][-2] = 1.0
         #prediction[0][-1] = (np.sin(step/1000.)+1.)/2.
         
-        if args.bound:
-          prediction[0][-2] = (np.cos(step/1000.)+1.)/2.
-        prediction = prediction.reshape(-1,data_dim)
+        # if args.bound:
+        #   prediction[0][-2] = (np.cos(step/1000.)+1.)/2.
+        
         #waveform.append(prediction)
         waveform = np.append(waveform, prediction, axis=0)
         
@@ -287,6 +292,7 @@ def main():
                 (step + 1) % args.save_every == 0):
             out = sess.run(decode, feed_dict={samples: waveform})
             write_wav(out, wavenet_params['sample_rate'], args.wav_out_path)
+            print (prediction)
 
     # Introduce a newline to clear the carriage return from the progress.
     print()
@@ -302,11 +308,12 @@ def main():
 
     # Save the result as a wav file.
     if args.wav_out_path:
-        if not args.fast_generation:
-            waveform = waveform[net.receptive_field:]
+        # if not args.fast_generation:
+        #     waveform = waveform[net.receptive_field:]
+        waveform  = waveform[net.receptive_field//data_dim+1:]
         samp = np.array(waveform).reshape([-1, data_dim])
-        out = sess.run(decode, feed_dict={samples: samp})
-        write_wav(out, wavenet_params['sample_rate'], args.wav_out_path)
+        # out = sess.run(decode, feed_dict={samples: samp})
+        write_wav(samp, wavenet_params['sample_rate'], args.wav_out_path)
 
     print('Finished generating. The result can be viewed in TensorBoard.')
 

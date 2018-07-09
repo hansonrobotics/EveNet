@@ -46,22 +46,19 @@ def batch_to_time(value, dilation, name=None):
 def causal_conv(value, filter_, dilation, name='causal_conv'):
     with tf.name_scope(name):
         filter_width = tf.shape(filter_)[0]
-        padding = [[0, 0], [(filter_width - 1) * dilation, 0], [0, 0]]
-        padded = tf.pad(value, padding)
         if dilation > 1:
-            # transformed = time_to_batch(value, dilation)
-            restored = tf.nn.conv1d(padded, filter_, stride=1,
+            transformed = time_to_batch(value, dilation)
+            conv = tf.nn.conv1d(transformed, filter_, stride=1,
                                 padding='VALID')
-            # restored = batch_to_time(conv, dilation)
+            restored = batch_to_time(conv, dilation)
         else:
-            restored = tf.nn.conv1d(padded, filter_, stride=1, padding='VALID')
+            restored = tf.nn.conv1d(value, filter_, stride=1, padding='VALID')
         # Remove excess elements at the end.
         out_width = tf.shape(value)[1] - (filter_width - 1) * dilation
         result = tf.slice(restored,
                           [0, 0, 0],
-                          [-1, tf.shape(value)[1], -1])
+                          [-1, out_width, -1])
         return result
-
 
 def mu_law_encode(audio, quantization_channels):
     '''Quantizes waveform amplitudes.'''
