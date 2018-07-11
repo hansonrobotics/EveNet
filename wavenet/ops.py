@@ -84,3 +84,64 @@ def mu_law_decode(output, quantization_channels):
         # Perform inverse of mu-law transformation.
         magnitude = (1 / mu) * ((1 + mu)**abs(signal) - 1)
         return tf.sign(signal) * magnitude
+def encode_data(data,data_dim):
+    """Encodees a given data to softmax probablity distribution using the following rule.
+        The data distrubtion is assumed from interval [0, 1] inclusive. This method first 
+        splits the interval into 10 intervals of the same size([0, 0.1),[0.1,0.2),...,[0.9,1)), and 
+        uses the boundaries as class for softmax classifiction. In this way we have 11 classes.
+        To convert the given value to softmax probablities, a simple trick is used. Each given number
+        can be represented using upper bound and lower bound of inteveral it is found.
+        Lets say we have value 'x' in the dataset and it is found between 'l'(lower bound) and 'u'(
+        lower bound). We want to design a function that represent x interms of l and u.
+            x = p * l + q * u
+        and we want to find p and q where , p + q = 1
+        More explanation and justification  found at https://docs.google.com/document/d/1z29ABXsvclBBJi7Q8svldnc5gvj2NizKad0i3mHDuds/edit?usp=sharing
+    Arguments:
+        data {{tf.Tensor}} -- Tensor containing values of each shape key of frames
+        data_dim {int} -- Dimenstion of each frame. This crossponds to number of shapekeys for single frame
+    
+    Returns:
+        tf.Tensor -- Tensor which contains probablity distribution encoded using the above method.
+    """
+    quantization_channels = 11
+    data = tf.reshape(data,[-1,data_dim])
+    data_10x = data * 10
+    ceil_index = tf.ceil(data_10x + tf.keras.backend.epsilon() * 10)
+    floor_index = tf.floor(data_10x)
+
+    data_ceil_prob = tf.reshape(data_10x - floor_index,(-1,))
+    data_floor_prob = tf.reshape(1 - data_ceil_prob, (-1,))
+
+    ceil_index = tf.reshape(ceil_index,(-1,))
+    floor_index = tf.reshape(floor_index,(-1,))
+
+    idx1 = tf.range(tf.shape(data)[0]) 
+    idx2 = tf.range(data_dim) 
+
+    ceil_index = tf.cast(ceil_index,tf.int32)
+    floor_index = tf.cast(floor_index,tf.int32)
+    
+    idx1 = tf.reshape(tf.tile(tf.reshape(idx1,[-1,1]),[1, data_dim]),[-1])
+    idx2 = tf.tile(idx2,[tf.shape(data)[0]])
+    idx_ceil = tf.stack((idx1, idx2,ceil_index),axis=-1)
+    idx_floor = tf.stack((idx1, idx2,floor_index),axis=-1)
+    
+    softmax_distr_ceil =  tf.scatter_nd(idx_ceil,data_ceil_prob,(tf.shape(data)[0], data_dim, quantization_channels))
+    softmax_distr_floor =  tf.scatter_nd(idx_floor,data_floor_prob,(tf.shape(data)[0],data_dim, quantization_channels))
+
+    return softmax_distr_ceil + softmax_distr_floor
+
+
+def decode_data(data):
+    """This function decodes data encoded by 'encode_data' function above.
+    
+    Arguments:
+        data {tf.Tensor} -- Encoded data
+    
+    Returns:
+        tf.Tensor -- Decoded data
+    """
+
+    cm = tf.range(0, 1.1, 0.1)
+    decoded = cm *data
+    return tf.reduce_sum(decoded,axis=-1)
