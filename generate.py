@@ -73,7 +73,7 @@ def get_arguments():
     parser.add_argument(
         '--fast_generation',
         type=_str_to_bool,
-        default=True,
+        default=False,
         help='Use fast generation')
     parser.add_argument(
         '--wav_seed',
@@ -83,13 +83,13 @@ def get_arguments():
     parser.add_argument(
         '--gc_channels',
         type=int,
-        default=None,
+        default=64,
         help='Number of global condition embedding channels. Omit if no '
              'global conditioning.')
     parser.add_argument(
         '--gc_cardinality',
         type=int,
-        default=None,
+        default=2,
         help='Number of categories upon which we globally condition.')
     parser.add_argument(
         '--gc_id',
@@ -168,7 +168,7 @@ def main():
         global_condition_channels=args.gc_channels,
         global_condition_cardinality=args.gc_cardinality)
 
-    samples = tf.placeholder(tf.float32)
+    samples = tf.placeholder(tf.float32,[None,wavenet_params["data_dim"]])
     #    shape=[None, wavenet_params['quantization_channels']])
 
     if args.fast_generation:
@@ -191,11 +191,11 @@ def main():
     # decode = mu_law_decode(samples, wavenet_params['quantization_channels'])
     decode = samples
 
-    quantization_channels = wavenet_params['quantization_channels']
+    data_dim = wavenet_params['data_dim']
     if args.wav_seed:
         seed = create_seed(args.wav_seed,
                            wavenet_params['sample_rate'],
-                           quantization_channels,
+                           data_dim,
                            net.receptive_field)
         #waveform = sess.run(seed).tolist()
         waveform = seed
@@ -208,7 +208,7 @@ def main():
         #random_arr[0][-1] = 0
         #random_arr[0][-2] = 1
         
-        waveform = np.zeros((net.receptive_field, quantization_channels))
+        waveform = np.zeros((net.receptive_field, data_dim))
         #waveform[-1] = random_arr
         
     # if args.fast_generation and args.wav_seed:
@@ -303,7 +303,7 @@ def main():
     if args.wav_out_path:
         if not args.fast_generation:
             waveform = waveform[net.receptive_field:]
-        samp = np.array(waveform).reshape([-1, quantization_channels])
+        samp = np.array(waveform).reshape([-1, data_dim])
         out = sess.run(decode, feed_dict={samples: samp})
         write_wav(out, wavenet_params['sample_rate'], args.wav_out_path)
 

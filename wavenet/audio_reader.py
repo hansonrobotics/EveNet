@@ -9,9 +9,20 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-FILE_PATTERN = r'([0-9]+).*([0-9]+).*\.csv'
+# FILE_PATTERN = r'([0-9]+).*([0-9]+).*\.csv'
+DATA_FILE_PATTERN = r'([a-z]+).*'
 FIND_FILES_PATTERN = '*.csv'
-DATA_DIM = 77
+DATA_SUFFIX = "*.dat"
+EMOTION_SUFFIX = "*.emo"
+
+DATA_DIM = 75
+
+def get_emotion_index(emotion):
+    emotions = {
+        "confident":0,
+        "confused":1
+    }
+    return emotions[emotion]
 
 def get_category_cardinality(files):
     id_reg_expression = re.compile(FILE_PATTERN)
@@ -45,19 +56,20 @@ def find_files(directory, pattern=FIND_FILES_PATTERN):
 
 def load_generic_audio(directory, sample_rate):
     '''Generator that yields audio waveforms from the directory.'''
-    files = find_files(directory)
-    id_reg_exp = re.compile(FILE_PATTERN)
+    files = find_files(directory,DATA_SUFFIX)
+    id_reg_exp = re.compile(DATA_FILE_PATTERN)
     print("files length: {}".format(len(files)))
     randomized_files = randomize_files(files)
     for filename in randomized_files:
-        ids = id_reg_exp.findall(filename)
+        part, child = os.path.split(filename)
+        ids = id_reg_exp.findall(child)
         if not ids:
             # The file name does not match the pattern containing ids, so
             # there is no id.
             category_id = None
         else:
             # The file name matches the pattern for containing ids.
-            category_id = int(ids[0][0])
+            category_id = get_emotion_index(ids[0])
 
         # audio, _ = librosa.load(filename, sr=sample_rate, mono=True)
         # audio = audio.reshape(-1, 1)
@@ -127,16 +139,16 @@ class AudioReader(object):
         # TODO Find a better way to check this.
         # Checking inside the AudioReader's thread makes it hard to terminate
         # the execution of the script, so we do it in the constructor for now.
-        files = find_files(audio_dir)
+        files = find_files(audio_dir,DATA_SUFFIX)
         if not files:
             raise ValueError("No audio files found in '{}'.".format(audio_dir))
-        if self.gc_enabled and not_all_have_id(files):
-            raise ValueError("Global conditioning is enabled, but file names "
-                             "do not conform to pattern having id.")
+        # if self.gc_enabled and not_all_have_id(files):
+        #     raise ValueError("Global conditioning is enabled, but file names "
+        #                      "do not conform to pattern having id.")
         # Determine the number of mutually-exclusive categories we will
         # accomodate in our embedding table.
         if self.gc_enabled:
-            _, self.gc_category_cardinality = get_category_cardinality(files)
+            # _, self.gc_category_cardinality = get_category_cardinality(files)
             # Add one to the largest index to get the number of categories,
             # since tf.nn.embedding_lookup expects zero-indexing. This
             # means one or more at the bottom correspond to unused entries
@@ -144,7 +156,7 @@ class AudioReader(object):
             # to keep the code simpler, and preserves correspondance between
             # the id one specifies when generating, and the ids in the
             # file names.
-            self.gc_category_cardinality += 1
+            self.gc_category_cardinality = 2
             print("Detected --gc_cardinality={}".format(
                   self.gc_category_cardinality))
         else:
@@ -182,6 +194,7 @@ class AudioReader(object):
                 if self.sample_size:
                     # Cut samples into pieces of size receptive_field +
                     # sample_size with receptive_field overlap
+                    print category_id,"category id",filename
                     while len(audio) > self.receptive_field:
                         piece = audio[:(self.receptive_field +
                                         self.sample_size), :]
