@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/elggem/EveNet.svg?branch=master)](https://travis-ci.org/elggem/EveNet)
 
 This is a fork of ibab's excellent implementation of WaveNet. Here we are implementing changes for the generation of facial animations.
-## Exprements
+## Experiments
 ### Network with softmax output layer
 [Authors of wavenet stated](https://arxiv.org/abs/1609.03499) that modeling the conditional distribution:    
 
