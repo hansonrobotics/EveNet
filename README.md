@@ -13,7 +13,7 @@ with softmax distribution tends to work better than some of previous modeling, s
 
 This approach models each shape key values of each frame to softmax probability distribution of 11 classes. The probability values are calculated with the method explained  [here](https://docs.google.com/document/d/1PTGRjHrIJsW_7Ypv6uc3etWj37sevNbXCcDpuH8S1b8/edit?ts=5bfd4948#bookmark=id.43gy6l9nzf80).
 
-Here is [github branch](https://github.com/hansonrobotics/Evenet/tree/expermenting-with-softmax-layer) for this experment.
+Here is [github branch](https://github.com/hansonrobotics/Evenet/tree/expermenting-with-softmax-layer) for this Experiment.
 
 
 ### Shape key sampling
@@ -34,7 +34,7 @@ This type of joint probability can be applied to shape key sampling. Now the abo
 where S is number of samples, N is number of shape keys in single frame, ![xi](imgs/xi.png) is  ![ith](imgs/ith.png) frame and ![xi,j](imgs/xij.png) is jth shape key of ith frame.
 
 
-Code implementation  for this experment is found on [github branch](https://github.com/hansonrobotics/Evenet/tree/shape-key-sampling-with-softmax-layer).
+Code implementation  for this experiment is found on [github branch](https://github.com/hansonrobotics/Evenet/tree/shape-key-sampling-with-softmax-layer).
 
 ## Requirements
 
